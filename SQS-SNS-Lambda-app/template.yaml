@@ -73,7 +73,7 @@ Resources:
   SNSPublisherFunction:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: sqspublisher.publish_message
+      Handler: snspublish.publish_message
       CodeUri: snsmessage/
       Environment:
         Variables:
@@ -131,7 +131,7 @@ Outputs:
     Value: !Ref QueueConsumerFunction
   MySqsQueueAPI:
     Description: "API Gateway endpoint URL for Prod stage for SQS function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sns_message/"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sqs_message/"
   SNSAPI:
     Description: "API Gateway endpoint URL for Prod stage for SNS function"
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sqs_message/"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sns_message/"
