@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  SQS-SNS-Lambda-app
+
+  Sample SAM Template for SQS-SNS-Lambda-app
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: python3.9
+    Tracing: Active
+  Api:
+    TracingEnabled: True
+
+Resources:
+
+  MySqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt MyDeadLetterSqsQueue.Arn
+        maxReceiveCount: 2
+
+  MyDeadLetterSqsQueue:
+    Type: AWS::SQS::Queue
+
+  MySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Protocol: sqs
+          Endpoint: !GetAtt MySqsQueue.Arn
+
+  SnsToSqsPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "Allow SNS publish to SQS"
+            Effect: Allow
+            Principal:
+              Service: "sns.amazonaws.com"
+            Resource: !GetAtt MySqsQueue.Arn
+            Action: SQS:SendMessage
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref MySNSTopic
+      Queues:
+        - Ref: MySqsQueue
+
+  QueuePublisherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: sqspublisher.send_message
+      CodeUri: sqsmessage/
+      Environment:
+        Variables:
+          SQSqueueName: !Ref MySqsQueue
+          SQSqueueArn: !GetAtt MySqsQueue.Arn
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt MySqsQueue.QueueName
+      Events:
+        SQSQueueEvent:
+          Type: Api
+          Properties:
+            Path: /sqs_message
+            Method: put
+
+  SNSPublisherFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: sqspublisher.publish_message
+      CodeUri: snsmessage/
+      Environment:
+        Variables:
+          MySNSTopic_Arn: !Ref MySNSTopic
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: severlesspatternlambda
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt MySNSTopic.TopicName
+      Events:
+        SNSEvent:
+          Type: Api
+          Properties:
+            Path: /sns_message
+            Method: put
+
+
+  QueueConsumerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: sqsconsumer.sqs_consumer
+      CodeUri: sqsmessage/
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt MySqsQueue.Arn
+      Architectures:
+        - x86_64
+      Policies:
+        - SQSPollerPolicy:
+            QueueName:
+              !GetAtt MySqsQueue.QueueName
+      Events:
+        SqsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MySqsQueue.Arn
+            BatchSize: 10
+
+Outputs:
+
+  QueuePublisherFunction:
+    Description: QueuePublisherFunction function name
+    Value: !Ref QueuePublisherFunction
+  QueueConsumerFunction:
+    Description: QueueConsumerFunction function name
+    Value: !Ref QueueConsumerFunction
+  MySqsQueueAPI:
+    Description: "API Gateway endpoint URL for Prod stage for SQS function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sns_message/"
+  SNSAPI:
+    Description: "API Gateway endpoint URL for Prod stage for SNS function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sqs_message/"
