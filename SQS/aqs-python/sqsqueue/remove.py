@@ -4,6 +4,7 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 sqs = boto3.resource('sqs')
 
+
 def remove_queue(queue):
     """
     Removes an SQS queue. When run against an AWS account, it can take up to

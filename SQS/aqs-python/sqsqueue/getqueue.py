@@ -4,6 +4,7 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 sqs = boto3.resource('sqs')
 
+
 def get_queue(name):
     """
     Gets an SQS queue by name.
@@ -20,6 +21,7 @@ def get_queue(name):
         raise error
     else:
         return queue
+
 
 def get_queues(prefix=None):
     """
@@ -39,8 +41,6 @@ def get_queues(prefix=None):
     else:
         logger.warning("No queues found.")
     return queues
-
-
 
 
 get_queue('DemoS3Notification')

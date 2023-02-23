@@ -9,5 +9,5 @@ The Fanout Pattern
     - Push one message onto an SNS topic and two SQS queues will subscribe to the topic
     - No data loss
     - Make sure SQS queue access policy allows for SNS to write
-    - We can have both standard and Fifo queues as subcribers
+    - We can have both standard and Fifo queues as subscribers
     

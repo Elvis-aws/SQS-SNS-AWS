@@ -17,5 +17,5 @@ De-duplication
         - If you specify the same MessageGroupID in an SQS Fifo queue, only one consumer can process all these 
           messages
         - If you specify a different Message Group Id, messages within that group will be in order
-        - Each GroupId can have a diferent customer process the messages
-        - Ordering accross groups is not a guarantee
+        - Each GroupId can have a different customer process the messages
+        - Ordering across groups is not a guarantee

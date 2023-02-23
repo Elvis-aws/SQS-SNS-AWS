@@ -1,8 +1,10 @@
 import logging
 import boto3
 from botocore.exceptions import ClientError
+
 logger = logging.getLogger(__name__)
 sqs = boto3.resource('sqs')
+
 
 def create_queue(name, attributes=None):
     """
@@ -28,5 +30,6 @@ def create_queue(name, attributes=None):
         raise error
     else:
         return queue
+
 
 create_queue('DemoS3Notification')

@@ -10,9 +10,9 @@ Standard-Queue
     - However, occasionally (because of the highly distributed architecture that allows nearly unlimited throughput), 
       more than one copy of a message might be delivered out of order
     - They provide best-effort ordering which ensures that messages are generally delivered in the same order as 
-      theyre sent
+      they are sent
 ************
-Fifo-Queueus
+Fifo-Queues
 ************
     - FIFO (First-In-First-Out) queues have all the capabilities of the standard queues, but are designed to 
       enhance messaging between applications when the order of operations and events is critical, or where duplicates 

@@ -4,7 +4,7 @@
 Simple Queue Service
 ********************
     - Amazon SQS offers a secure, durable, and available hosted queue that lets you integrate and decouple distributed 
-      software systems and components.
+      software systems and components
     - It offers common constructs such as dead-letter queues and cost allocation tags
     - There are three main parts in a distributed messaging system
         - The components of your distributed system

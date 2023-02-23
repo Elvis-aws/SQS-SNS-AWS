@@ -1,14 +1,15 @@
 
+
 *******************
 SQS access policies
 *******************
     - Cross-account access to SQS
-      - Allowing other services to write to SQS
+        - Allowing other services to write to SQS
 *************
 Access policy
 *************
     - Define who can send/receive messages to the queue
-        - Only the queue onwner
+        - Only the queue owner
         - Only the specified account, IAM users and roles
 {
   "Version": "2008-10-17",

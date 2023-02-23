@@ -1,10 +1,10 @@
 import logging
-import sys
 import boto3
 from botocore.exceptions import ClientError
-from sqsqueue import *
+
 logger = logging.getLogger(__name__)
 sqs = boto3.resource('sqs')
+
 
 def delete_messages(queue, messages):
     """
