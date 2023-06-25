@@ -1,0 +1,264 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'S3, SNS, SQS, lambda app
+
+  '
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: python3.9
+    Tracing: Active
+  Api:
+    TracingEnabled: true
+Parameters:
+  MyWebhookURL:
+    Type: String
+    Default: https://webhook.site/bab1d946-3b3f-4577-b4d3-7a66d32c88f6
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    DependsOn: S3ToSNSTopicPolicy
+    Properties:
+      AccessControl: Private
+      BucketName:
+        Fn::Sub: ${AWS::StackName}-s3bucket
+      NotificationConfiguration:
+        TopicConfigurations:
+        - Topic:
+            Ref: SNSTopic
+          Event: s3:ObjectCreated:*
+        - Event: s3:ObjectRemoved:*
+          Topic:
+            Ref: SNSTopic
+  S3ToSNSTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+        - Action:
+          - sns:Publish
+          Condition:
+            ArnLike:
+              aws:SourceArn: arn:aws:s3:::fan-out-app-s3bucket
+            StringEquals:
+              aws:SourceAccount:
+                Ref: AWS::AccountId
+          Effect: Allow
+          Resource:
+            Ref: SNSTopic
+          Principal:
+            Service:
+            - s3.amazonaws.com
+      Topics:
+      - Ref: SNSTopic
+  SNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: ${AWS::StackName}-snstopic
+  WebhookSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn:
+        Ref: SNSTopic
+      Endpoint:
+        Ref: MyWebhookURL
+      Protocol: https
+      DeliveryPolicy:
+        healthyRetryPolicy:
+          numRetries: 20
+          minDelayTarget: 10
+          maxDelayTarget: 30
+          numMinDelayRetries: 3
+          numMaxDelayRetries: 17
+          numNoDelayRetries: 0
+          backoffFunction: exponential
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint: ngwesseaws@gmail.com
+      Protocol: email
+      TopicArn:
+        Ref: SNSTopic
+  LambdaSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint:
+        Fn::GetAtt:
+        - SNSLambdaFunction
+        - Arn
+      Protocol: lambda
+      TopicArn:
+        Ref: SNSTopic
+  SQS1Subscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint:
+        Fn::GetAtt:
+        - SQSQueue1
+        - Arn
+      Protocol: sqs
+      TopicArn:
+        Ref: SNSTopic
+  SQS2Subscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint:
+        Fn::GetAtt:
+        - SQSQueue2
+        - Arn
+      Protocol: sqs
+      TopicArn:
+        Ref: SNSTopic
+  SQS3Subscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Endpoint:
+        Fn::GetAtt:
+        - SQSQueue3
+        - Arn
+      Protocol: sqs
+      TopicArn:
+        Ref: SNSTopic
+  SnsToSqsPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: Allow SNS publish to SQS
+          Effect: Allow
+          Principal:
+            Service: sns.amazonaws.com
+          Resource: '*'
+          Action: SQS:SendMessage
+          Condition:
+            ArnLike:
+              aws:SourceArn:
+                Fn::Sub: arn:aws:sqs:::${AWS::StackName}
+      Queues:
+      - Ref: SQSQueue1
+      - Ref: SQSQueue2
+      - Ref: SQSQueue3
+  SQSQueue1:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-queue1
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - MyDeadLetterSqsQueue
+          - Arn
+        maxReceiveCount: 2
+  SQSQueue2:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-queue2
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - MyDeadLetterSqsQueue
+          - Arn
+        maxReceiveCount: 2
+  SQSQueue3:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-queue3
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - MyDeadLetterSqsQueue
+          - Arn
+        maxReceiveCount: 2
+  MyDeadLetterSqsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName:
+        Fn::Sub: ${AWS::StackName}-dlqueue
+  SNSInvokeLambdaFunction:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: SNSLambdaFunction
+      Principal: sns.amazonaws.com
+  SNSLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AWS::StackName}-lambda
+      Handler: app.s3_sns_trigger
+      CodeUri: SNSLambdaFunction
+      Environment:
+        Variables:
+          MySNSTopic_Arn:
+            Ref: SNSTopic
+    Metadata:
+      SamResourceId: SNSLambdaFunction
+  CloudWatchDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardBody:
+        Fn::Sub: "{\n  \"start\": \"-PT1H\",\n  \"periodOverride\": \"inherit\",\n\
+          \  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n\
+          \      \"y\": 0,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\"\
+          : {\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Throttles\",\
+          \ \"FunctionName\", \"!Ref SNSLambdaFunction\", \"Resource\", \"${SNSLambdaFunction}\"\
+          \ ],\n          [ \".\", \"Errors\", \"...\" ]\n        ],\n        \"view\"\
+          : \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\"\
+          ,\n        \"stat\": \"Sum\",\n        \"period\": 30,\n        \"title\"\
+          : \"Throttles & Errors\"\n      }\n    },\n     {\n      \"type\": \"metric\"\
+          ,\n      \"x\": 0,\n      \"y\": 1,\n      \"width\": 12,\n      \"height\"\
+          : 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/Lambda\"\
+          , \"Invocations\", \"FunctionName\", \"!Ref SNSLambdaFunction\", \"Resource\"\
+          , \"${SNSLambdaFunction}\" ]\n        ],\n        \"view\": \"timeSeries\"\
+          ,\n        \"stacked\": false,\n        \"region\": \"${AWS::Region}\",\n\
+          \        \"stat\": \"SampleCount\",\n        \"period\": 30,\n        \"\
+          title\": \"Invocations\"\n      }\n    },\n    {\n      \"type\": \"metric\"\
+          ,\n      \"x\": 0,\n      \"y\": 2,\n      \"width\": 12,\n      \"height\"\
+          : 6,\n      \"properties\": {\n        \"metrics\": [\n          [ \"AWS/S3\"\
+          , \"BucketSizeBytes\", \"BucketName\", \"!Ref S3Bucket\"]\n        ],\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"period\": 300,\n   \
+          \     \"title\": \"S3 Bucket Size\",\n        \"view\": \"singleValue\"\n\
+          \      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0,\n\
+          \      \"y\": 3,\n      \"width\": 12,\n      \"height\": 6,\n      \"properties\"\
+          : {\n        \"metrics\": [\n          [ \"AWS/S3\", \"NumberOfObjects\"\
+          , \"BucketName\", \"!Ref S3Bucket\"]\n        ],\n        \"period\": 300,\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"title\": \"S3 Number\
+          \ of Objects\",\n        \"view\": \"singleValue\"\n      }\n    },\n  \
+          \  {\n      \"type\": \"metric\",\n      \"x\": 1,\n      \"y\": 1,\n  \
+          \    \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n   \
+          \     \"metrics\": [\n          [ \"AWS/SNS\", \"NumberOfMessagesPublished\"\
+          , \"TopicName\", \"!Ref SNSTopic\"]\n        ],\n        \"period\": 300,\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"title\": \"SNS Messages\
+          \ Published\",\n        \"view\": \"singleValue\"\n      }\n    },\n   \
+          \ {\n      \"type\": \"metric\",\n      \"x\": 1,\n      \"y\": 2,\n   \
+          \   \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n    \
+          \    \"metrics\": [\n          [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\"\
+          , \"QueueName\", \"!Ref SQSQueue1\"]\n        ],\n        \"period\": 300,\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"title\": \"SQS queue1\
+          \ Messages Visible\",\n        \"view\": \"singleValue\"\n      }\n    },\n\
+          \    {\n      \"type\": \"metric\",\n      \"x\": 1,\n      \"y\": 3,\n\
+          \      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n \
+          \       \"metrics\": [\n          [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\"\
+          , \"QueueName\", \"!Ref SQSQueue2\"]\n        ],\n        \"period\": 300,\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"title\": \"SQS queue2\
+          \ Messages Visible\",\n        \"view\": \"singleValue\"\n      }\n    },\n\
+          \    {\n      \"type\": \"metric\",\n      \"x\": 1,\n      \"y\": 4,\n\
+          \      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n \
+          \       \"metrics\": [\n          [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\"\
+          , \"QueueName\", \"!Ref SQSQueue3\"]\n        ],\n        \"period\": 300,\n\
+          \        \"region\": \"${AWS::Region}\",\n        \"title\": \"SQS queue3\
+          \ Messages Visible\",\n        \"view\": \"singleValue\"\n      }\n    },\n\
+          \    {\n      \"type\": \"metric\",\n      \"x\": 1,\n      \"y\": 5,\n\
+          \      \"width\": 12,\n      \"height\": 6,\n      \"properties\": {\n \
+          \       \"metrics\": [\n          [ \"AWS/SQS\", \"ApproximateNumberOfMessagesVisible\"\
+          , \"QueueName\", \"!Ref MyDeadLetterSqsQueue\"]\n        ],\n        \"\
+          period\": 300,\n        \"region\": \"${AWS::Region}\",\n        \"title\"\
+          : \"SQS DLQ Messages Visible\",\n        \"view\": \"singleValue\"\n   \
+          \   }\n    }\n  ]\n}\n"
